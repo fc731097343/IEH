@@ -1,0 +1,401 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage{times}                       % 使用 Times New Roman 字体
+\usepackage{CJK,CJKnumb,CJKulem}         % 中文支持宏包
+\usepackage{color}                       % 支持彩色
+
+\usepackage{comment}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amscd}
+\usepackage{graphicx}
+\usepackage{indentfirst}
+
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{titlesec}
+\usepackage[top=25.4mm, bottom=25.4mm, left=31.7mm, right=32.2mm]{geometry}
+
+%页面设置
+\begin{CJK*}{GBK}{nsung}
+%\theoremstyle{definition}
+%\newtheoremstyle{mythm}{1.5ex plus 1ex minus .2ex}{1.5ex plus 1ex minus .2ex}
+%   {\kai}{\parindent}{\song\bfseries}{}{1em}{}
+\newtheoremstyle{mythm}{1ex}{1ex}%定理环境的上下间距.
+{\CJKfamily{nsung}}{\parindent}{\CJKfamily{nsung} \bf}{}{1em}{}%定理内容为宋体, 缩进, 定理名称为黑粗体
+\theoremstyle{mythm}%设置定理环境
+\newtheorem{thm}{定理~}[section]
+\newtheorem{lem}[thm]{引理~}
+\newtheorem{pro}[thm]{性质~}
+\newtheorem{fact}[thm]{Fact}
+\newtheorem{prop}[thm]{命题~}
+\newtheorem{ques}[thm]{问题~}
+\newtheorem{cor}[thm]{推论~}
+\newtheorem{de}[thm]{定义~}
+\newtheorem{rem}[thm]{注记~}
+\numberwithin{equation}{section}
+\end{CJK*}
+\renewcommand\refname{\CJKfamily{nsung}参考文献}
+%\renewcommand{\abstractname}{摘要}
+%%%%%%%%%%%%%%%%下面几行用于改变证明环境的定义
+\makeatletter
+\renewenvironment{proof}[1][\proofname]{\par
+\pushQED{\qed}%
+\normalfont \topsep6\p@\@plus6\p@ \labelsep1em\relax
+\trivlist
+\item[\hskip\labelsep\indent
+\bfseries #1]\ignorespaces
+}{%
+\popQED\endtrivlist\@endpefalse
+}
+\makeatother
+%%%%%%%%%%%%%%(http://latex.yo2.cn)
+\renewcommand{\proofname}{\CJKfamily{nsung}证明}
+
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+%\titleformat{\section}{\CJKfamily{hei} }{\arabic{section}{1em}{}
+\titleformat{\section}{\large \bf \CJKfamily{nsung} }{{\bf \thesection\space}}{0pt}{}
+
+\begin{document}
+%\setlength{\baselineskip}{1ex}%设置行距
+\setlength{\abovedisplayskip}{1ex} %设置公式上边间距
+\setlength{\belowdisplayskip}{1ex} %设置公式下边间距
+\begin{CJK*}{GBK}{nsung}
+
+\author{\centering 金仲明, 张德兵, 胡尧, Shiding Lin, 蔡登, Member, IEEE, and 何晓飞, Senior Member, IEEE}                                 % 作者
+\title{通过迭代最近邻拓展进行快速而精确的哈希}              % 题目
+\maketitle                                           % 生成标题
+
+\section{摘要}
+\par 哈希技术广泛使用在近邻检索问题中。这些方法的基本思想是生成二进制编码来表示原数据，并且保留原数据中的相似度关系。给定询问，哈希方法会线性扫描所有与询问点之间汉明距离不超过$r_h$的点。然而，在寻找精确最近邻时，定位时间与线性扫描时间都与$O\sum_{i=0}^{r_h} ( \begin{matrix} c \\ i \end{matrix} )$ 相关，其中c为编码长度。这个复杂度随$r_h$增长而指数级上升。IEH算法通过离线NN图来建立辅助索引，以此来避免$r_h$过大。这个辅助索引可以很方便地与所有传统哈希方法相结合。
+
+
+
+\section{引言}
+\par 当数据维度增大时，传统近邻检索算法的表现甚至比线性扫描更差，因此人们转而选择近似近邻检索。这些算法的关键思想就是生成二进制编码来表示原数据，并且保留原数据中的相似度关系。给定$n$个$d$维向量构成的数据集，哈希算法采用$c$个哈希函数生成长度为$c$的汉明编码。常用的检索方法是依次计算询问点与所有点直接的汉明距离并将他们进行排名。我们可以利用xor操作来计算汉明距离，不过找到最近邻的时间耗费仍然需要$O(n)$。一种常见的加速方法为使用哈希索引。我们通过把$c$位的哈希编码放入与其相同的$c$位哈希桶中，来构建哈希索引。给定一个询问，检索可以按照以下三个阶段进行：1）编码阶段：询问点经过$c$个哈希函数生成$c$位编码。2）定位阶段：返回询问点的汉明半径不超过$r_h$的所有哈希桶中的点 3）线性扫描阶段：从返回的点中算出答案。显然，上述操作的总时间复杂度为$O(dc+\sum_{i=0}^{r_h}( \begin{matrix} c \\ i \end{matrix} ) +  \dfrac{n}{2^c} \sum_{i=0}^{r_h}( \begin{matrix} c \\ i \end{matrix} ))$。然而，为了找到准确的近邻，现有的哈希算法需要使用很大的$r_h$值，这会导致时间复杂度指数级上升。
+
+\par 以图 \ref{fig1} 为例，一个哈希算法产生了$l_1, l_2, l_3$三个超平面，将二维空间分割为7部分。同一部分中的点拥有相同的哈希码。图中绿色的星形为询问点，红色圆圈为近邻，剩余点为黑色正方形。使用哈希索引时，令汉明半径为2就能达到100\%召回率。需要被定位的桶数量为$\sum_{i=0}^{2} ( \begin{matrix} 3 \\ i \end{matrix} ) = 7$，被利用到的点为16个（包括10个错误点）。利用辅助索引我们可以避免使用大的半径。参考图1(b),我们选取与询问点哈希编码相同的3个点$a_1,a_2,a_3$作为辅助点，通过拓展他们的近邻，我们仍然可以达到100\%召回率。
+在这个方法中，被定位的桶只有一个，且被利用的点只有7个（包含1个错误点）。根据上述分析，与原方法对比，我们的方法可以在保持同样召回率的前提下，使用更少的定位时间和线性扫描时间。
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig1.png}
+\caption{动机说明}
+\label{fig1}
+\end{figure}
+
+\par 基于这个想法，我们提出了IEH算法，该算法可以在不使用大半径值的情况下实现高召回率。特别地，IEH算法在离线阶段构建了一个K近邻表格，存储了每个数据点的k个近邻。在线阶段中，IEH利用K近邻表格拓展点，这些点来自汉明半径非常小的哈希桶中。通过执行迭代过程，IEH的表现能够获得更好地提升。理论分析与实验结果表明，IEH算法可以极大地改进传统哈希方法的表现。
+
+\section{相关工作}
+\subsection{基于哈希的近似近邻检索方法}
+\par 一般哈希方法可以总结如下。给定$n$个数据点$ X = [x_1, ..., x_n] \in \mathbb{R}^{d*n}$，通过$c$个哈希函数生成$c$位哈希编码：
+$$ H(x) = [h_1(x),h_2(x),...h_c(x)]$$
+\par 其中$h_l(x) \in {0,1} $是第$l$个哈希函数。对基于线性投影的哈希，我们有
+$$ h_l(x) = sgn(F(w_l^Tx + t_l)) $$
+\par 其中$w_l$是投影向量，$t_l$是截距。不同哈希函数中各参数不同。
+
+\par 一种广泛使用的哈希算法为局部敏感哈希(LSH),它基于随机投影，即随机生成$w_l$。在LSH中，F是单位函数，$t_l = 0$。因此我们有：
+
+$$ h_l(x) = \begin{cases} 1, \ if \ w_l^Tx \geq 0 \\ 0, otherwise \end{cases}$$
+
+\par 其中向量$w_l$是由“与输入x同维度”的零均值多变量高斯函数$\mathcal{N}(0,I)$生成。基于LSH的大部分拓展算法都尝试降低LSH的空间需求，但这会导致处理询问的时间增加。所有这些算法都是基于随机投影方法，并且不考虑数据分布情况。
+
+\par 与上面这些方法不同，一些基于学习的哈希算法则使用了数据分布。一些算法利用了数据类同矩阵中的谱特性，来生成二进制编码。利用谱特性的方法通常很耗费时间，为了避免高计算花销，Weiss等人提出了谱哈希(SH)方法，该方法中进行了一个强假设：所有数据均匀分布。这个假设引出了一个简单的1-D Laplacians 特征根函数解。然而，该方法忽视了原数据中的几何结构，因此可能导致局部最优的表现。锚图哈希(AGH)算法则克服了这个缺陷。它从数据中生成锚点，并且通过他们表达相似性。在这个方法下，数据的谱分析能够有显著的表现。也有一些方法致力于哈希函数学习中的标记信息杠杆，这引向了监督学习和半监督学习。
+
+\subsection{基于树的近似近邻检索方法}
+\par KD树方法是近似近邻检索问题中一个最为常用且有效的树方法。传统的KD树算法在低维度上有很好表现，但在高维度上表现迅速退化。Arya等人改造了原始KD树来进行近似匹配，其中使用了优先队列来加速树中的检索。在基于树的算法中，还有随机化KD树、R树等算法。
+
+\subsection{基于K近邻图的近似近邻检索方法}
+\par 正如第一章中所说，IEH算法需要在离线阶段构建一个K近邻表格。这个表格与K近邻图有紧密的联系。一个K近邻图是一个有向图，包含了一个点集$X$和一个有向边集合$E$。当$x_j$是$x_i$的K近邻之一时，$x_i$被连接到$x_j$。 IEH算法使用哈希方法来获得初始点，这些点比随机点更加接近询问点。
+
+\section{迭代拓展哈希}
+\subsection{标记与符号}
+\par 令$ X = [x_1,...,x_n]$是大小为$N$的数据集，$X \in \mathbb{R}^{d*n} $。数据点$x \in \mathbb{R}^{d} $的K近邻使用$\mathcal{N}_k(x)$。给定询问$q\in \mathbb{R}^{d} $，我们希望在X中找到它的$t$近邻  $\mathcal{N}_t(q)$。我们使用欧拉距离$\rho (.,.)$来衡量点x与y的距离：$\rho (x,y) = \left\| x - y\right\|_2 $。
+
+\subsection{算法}
+\par 我们按以下几点说明IEH算法。在离线阶段，IEH需要如下操作：
+\begin{enumerate}
+\item 使用一个现有的哈希方法生成c个哈希函数
+\item 使用这些哈希函数生成哈希编码
+\item 构建用于在线拓展的最近邻表
+\end{enumerate}
+\par 在在线阶段，IEH有3个阶段：
+
+\begin{enumerate}
+\item 编码阶段：生成查询点的c位二进制码
+\item 定位阶段：一个非常小的汉明半径中的哈希桶中的候选点会被返回。
+\item 拓展阶段：迭代地选择p个最近候选点，利用k近邻表拓展它们的k近邻（迭代次数为s)。
+\end{enumerate}
+
+在算法 \ref{alg1}中我们总结了IEH的在线步骤。
+
+\begin{algorithm}
+\caption{迭代拓展哈希（IEH）}
+\label{alg1}
+\begin{algorithmic}[1]
+\REQUIRE p：最近邻数量，用于每次迭代中进行拓展；
+k：要拓展近邻的数目；
+s：迭代次数；
+id：临时索引；
+M：临时集合；
+\ENSURE 查询点的最近邻集合
+\STATE 初始化：$id = -1$，$M = \emptyset$
+\STATE 编码阶段：生成查询点的c位二进制码
+\STATE 查询阶段：以一个很小的汉明半径得到一些候选点，放入M中
+\STATE 拓展阶段：
+\FORALL{iter < s}
+\STATE 在M中找到查询点的最近p个候选点
+\FORALL{i < p}
+\FORALL{j < k}
+\STATE id = 第i个最近邻候选点的第j个邻居
+\IF{$id \notin M$}
+\STATE $M = M \cup \{id\}$
+\ENDIF
+\ENDFOR
+\ENDFOR
+\ENDFOR
+\STATE 从M中选t个最近邻作为结果
+
+\end{algorithmic}
+\end{algorithm}
+
+\par 上面的方法与原始的哈希技术不同的地方在于，我们使用拓展阶段替换了一个大的汉明半径。拓展阶段主要取决于最近的候选点和K近邻表。K近邻表在离线阶段被构建，它使用$\mathcal{N}_k(x)$保存数据集X中所有x。因为候选点与询问点很近，所以我们的拓展操作可以获得其他的临近候选点，从而避免一个大的汉明半径。我们也设计了一个迭代步骤，它在每次迭代中拓展前p个最近候选集，来实现询问导向的拓展。
+\subsection{K近邻表的动态拓展}
+\par K近邻表可以被动态地更新。如图 \ref{fig2} (a)所示，我们希望在当前的k近邻表中插入新的点$x_m$。为了动态更新k近邻表，点对间的距离以及它们的近邻需要被记录。例如，点$x_1$有近邻$x_5,x_7,...$,
+$x_1$与$x_7$间的距离可以被存储为$\rho (x_1,x_7) (= \rho(x_7,x_1))$。如图  \ref{fig2} (b)所示，在当前k近邻表中插入$x_m$的步骤如下所示：
+\begin{enumerate}
+\item 计算$x_m$与当前k近邻表中所有点的距离。
+
+\item 根据距离值调整表。例如$\rho(x_3,x_9) < \rho(x_3,x_m) < \rho(x_3,x_2)$,$x_m$可以被考虑为$x_3$的近邻，它位于$x_9$和$x_2$之间。因为我们只维护$x_3$的k近邻表，所以$x_7$会从中被删除。在实现中，我们使用链表来构建k近邻图，使它的调整操作能够很快进行。
+
+\item 根据距离值将$x_m$和它的近邻插入表中。例如，假设有$\rho(x_m,x_4) < \rho(x_m,x_1) < ... < \rho(x_m,x_7) < \rho(x_m,x_20)$，则$x_m$的k近邻为$x_4,x_1,...,x_7,x_{20}$。
+\end{enumerate}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig2.png}
+\caption{构建KNN表的离线过程大致说明}
+\label{fig2}
+\end{figure}
+
+\subsection{在线阶段的实现}
+\par 在实现在线阶段时，我们使用了2个关键的数据结构：优先队列和位图。首先，为了在每次迭代中快速地选择前p个最近邻，我们使用优先队列来存储集合$\mathcal{M}$。第二，因为拓展阶段中存在重复的候选点，我们使用位图（位图中每个点对应一个点编号）来避免重复统计。
+
+\subsection{理论分析}
+\par 这一章中，我们通过理论分析来说明基于LSH的IEH算法的k近邻拓展可以保证准确的t近邻有很高的概率被返回，当参数k足够大时。
+\par 下面的知名引理说明了LSH算法很好地保留了点对间的相似性。
+\begin{thm}[Jonson Lindenstrauss 理论]
+\label{thm1}
+ 令$U \in\mathbb{R}^{d*c} $是一个随机矩阵，其中每个$U_{i,j}$在高斯分布$\mathcal{N}(x\ | \ 0,1)$上独立同分布。令$P_u$为投影操作，将$\mathbb{R}^d$上的向量投影进U的列向量涵盖的字空间$\mathbb{R}^c$上。对任意两个$\mathbb{R}^d$上的点$x,q$，给定$\varepsilon \in (0,1)$，我们有$ (1-\varepsilon) \left\| x - q\right\|_2^2 \leq \left\| P_u(x - q)\right\|_2^2 \leq  (1+\varepsilon) \left\| x - q\right\|_2^2$。
+
+假设X均匀分布。因此，如图 \ref{fig3}所示，$\mathcal{N}_t(q)$在超平面$S_{r1}$的半径$r_1$内随机分布。在定位阶段后，我们得到p个候选点$X'\in\mathbb{R}^{d*p}, X' \subset X $。基于引理1，候选点与询问q之间的期望距离$r_2 = 2^{-\dfrac{1}{d}}(1+\varepsilon)r_1$。对于候选点$x_i \in X'$, $\mathcal{N}_k(x_i)$在超平面$S_R^{(i)}$上半径不超过$R$的区域内随机分布。下面的定理说明了在半径$R$的条件下，拓展阶段中被包含的点有很高的概率与$\mathcal{N}_t(q)$相符合。
+\end{thm}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig3.png}
+\caption{引理 \ref{thm1} 的说明}
+\label{fig3}
+\end{figure}
+
+
+\begin{thm}[Jonson Lindenstrauss 理论]
+\label{thm2}
+如果有$ R \geq \sqrt{r_1^2 + r_2^2} = \sqrt{4^{-\dfrac{1}{d}}(1+\varepsilon)^2+1} * r1 $，那么$S_{r1}$至少有$1-(\dfrac{1}{2})^p$的概率，能够被$ \ S_R^{(i)} (i=1,2,..p)$的联合给覆盖。
+
+\end{thm}
+\begin{proof}
+在图 \ref{fig3} 中，我们可以清楚地看出，如果$R \geq \sqrt{r_1^2 +r_2^2}$，每个候选点中央的超平面可以覆盖至少一半的超平面$S_{r1}$。在一般的高维数据上，我们可以轻松地检定这个特性仍然保持。基于候选点的随机性，对于给定候选点$x_i, i =1,2,...,p$，每个超平面$S_{r1}$上的点被超平面$S_{R}^{(i)}$覆盖的概率至少为$\dfrac{1}{2}$。因为有p个独立的超平面，所以$S_{r1}$至少有$1-(\dfrac{1}{2})^p$的概率能够被$ \ S_R^{(i)} (i=1,2,..p)$的联合给覆盖。
+
+注意到R的下边界由$\varepsilon$决定。在IEH算法中，每次迭代中拓展前p个近邻与询问导向的迭代步骤都能降低这个下边界。在拓展阶段中，参数$k$的值越大，半径R的值越大。因此，使用一个大的k，IEH算法拥有一个非常高的概率找到询问$q$的精确$t$近邻。
+\end{proof}
+\subsection{复杂度分析}
+\par IEH算法中包含下列三个额外开销。
+\begin{enumerate}
+\item 在离线阶段，IEH需要$O(n^2(d+log_2n))$的时间来构建k近邻表。在实验中，我们展示了大规模数据上的实际构建时间。
+\item 在线阶段，k近邻表需要的额外空间复杂度为$O(kn)$。因为实际使用中，$k$的取值较小，所以这部分额外花销较低。
+\item 在线阶段，算法1说明了IEH仅仅带来了一点额外的时间开销$O(dpks + \sum_{i=1}^{pks} log_2i)$，用于拓展阶段中的$q$。在这里，$p,k,s$的值都非常小。进一步地，由于存在重复的候选点，所以实际的拓展时间非常少。
+\end{enumerate}
+
+\section{实验结果}
+\par 本章节中，我们用高维数据ANN检索问题评估IEH算法。实验中用到的三种基于真实数据的大型数据库分别如下：
+\begin{enumerate}
+\item CIFAR 10：包含60000张图片，每张图片用一个3071维的向量表示。该数据库是公开的，文章10,25,42的作者都使用过。
+\item GIST-1M：包含一百万GIST描述子，每个描述子用一个384维的向量表示。该数据库是公开的，文章25,35,以及方法citeSSH都使用过。
+\item SIFT-1M：包含一百万SIFT描述子，每个描述子用一个128维的向量表示。该数据库是公开的，文章18,41,42的作者都使用过。
+\end{enumerate}
+\par 为了减少定位过程中获得候选的数量，针对CIFAR10, GIST-1M, 和SIFT1M，我们分别学出24位、32位、和32位的汉明距离。我们随机抽取1000个数据点作为query，剩下的用作gallery数据库。如果返回点在query点最近k个邻居之内，这个点就被认为是正确的。为了测试不同方面的效果，我们取k=1和k=50两个值。我们的IEH方法有三个参数，我们分别把他们设为p=10，k=50，s=3。参数选择将在5.5章节介绍。
+所有的代码都是基于c++实现的，并在一台Intel Xeon(R) E7450 CPU（24核），包含256GB内存的电脑上测试的。在离线过程中，我们用了多线程的技术加速建立KNN土的过程。相反的，为了公平起见，在线上测试中，我们没有用多线程技术。
+\par 正如我们在前面章节中讨论的那样，IEH带来了一些额外代价。表\ref{tb2}展示了额外的离线时间代价和线上存储代价。我们可以清楚地看出，额外的代价在大型数据库中是容易处理的。除此之外，我们实验中只用了单机来跑离线实验的预处理过程。对于大型数据库，这个预处理过程可以通过多机并行方式解决。
+\subsection{与原始哈希方法的比较}
+\par 既然我们的IEH算法不依赖任何特定的哈希方法，不同的哈希方法将会带来不同的实验结果。我们用了5个最先进的哈希算法。
+\begin{enumerate}
+\item LSH（Locality sensitive hashing），这个方法基本上是基于随机映射的。
+\item KLSH（Kernelized locality sensitive hashing），这个方法将LSH方法泛化到内核空间.
+\item SH（Spectral hashing），这个方法是基于量化分析特征函数的值，特征函数沿着数据PCA方向计算。
+\item AGH（Anchor graph hashing），这个方法建立anchor图以加速波谱分析。
+\item SPH（SPherical hashing），这个方法用一个基于哈希函数的超平面，将数据点映射到二进制码。
+\end{enumerate}
+\par 需要注意的是LSH是一个线性方法，剩下的四种是非线性方法。对于KLSH和AGH，我们用了高斯核，宽度参数 $\theta$ 是通过随机选择3000个样本进行估计的， $\theta$ 是两两距离的平均值。KLSH和AGH都需要选择m个支持样本，我们就用了k-mean产生的这m个样本。整个实验中，参数m固定为100。
+与文章12,25,26,35,41,和42相似，我们用召回率曲线评估IEH方法的效果，并与原始的哈希方法做对比。为了考虑线上过程的所有运行时间，我们采用展示检索时间作为x轴，而不是抽取样本的数量。召回率曲线中的每个点都对应着一个给定的汉明半径（从0到5）。
+\par 图 \ref{fig4} 展示了1NN和50NN下的有LEH扩展的LSH召回率曲线，与原始LSH方法做对比。LSH$_{IEH}$-1NN表示有LEH扩展的LSH检索ANN。图 \ref{fig5}, \ref{fig6}, \ref{fig7}, \ref{fig8} 展示了有LEH扩展的其他四种哈希方法的性能。
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig4.png}
+\caption{LSH和LSH$_{IEH}$在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig4}
+\end{figure}
+
+\par 正如我们在前面章节所说，给定汉明半径，IEH扩展比原始哈希方法消耗了更多时间，只是因为IEH需要迭代KNN过程。然而，消耗同样的时间，IEH扩展获得了明显更高的召回率。更重要的是，在多数情况下IEH能够同时做到更高的召回率和更少的检索时间。例如，在CIFAR10,LSH-1NN用了10.11s获得45.7\%的召回率，二LSH$_{LEH}$-1NN只花费2,15s旧大道了73.1\%的召回率。这些图片清楚地展示了IEH相对于原始哈希方法的优势。
+表\ref{tb3}展示了50NN下原始哈希方法和我们提出IEH方法在三个数据库上的平均正确率均值（mAP）。我们能够清晰地看出IEH扩展同样获得了比原始哈希方法更高的mAP。
+
+\subsection{与多表 LSH的比较}
+\par 这部分我们 将LSH方法与基于多表LSH哈希方法进行比较。图\ref{fig9}和表\ref{tb4}展示了三个数据库下，50NN的召回率—抽取的样本数量的曲线，多表LSH（LSH$_{MT}$）以及我们提出的IEH算法的mAP。在这些实验中，我们建立一个3张表构成的LSH。我们能够清楚地看到，LEH扩展相比基于多表LSH的方法，同样地取得了更高的召回率和mAP。
+
+\subsection{与KD树的比较}
+\par 在这部分实验中，我们将在数据库上比较KLSH$_{LEH}$（基于KLSH的LEH算法）与KD-Tree of Fast Library for ANN(FLANN)的召回率曲线。FLANN是ANN检索问题方面最受欢迎的库。FLANN的KD树的实现见38,39文。KDT4展示了基于4棵树的KD树方法，KDT8和KDT16也是一样。KD树召回率曲线上的每个点对应一个给定的check number：32,64,128,256,512,1024,2048。check number是KD树的一个参数，对于KLSH$_{IEH}$和KLSH，每个点都对应一个给定的汉明半径（从0到4）。
+图 \ref{fig10} 和 \ref{fig11} 展示了1NN和50NN下KLSH，KLSH$_{IEH}$和KD树的召回率曲线。我们可以清楚地看出，随着数据维数的增加，IEH比KD树有这更多优势。并且，IEH在检索50NN的时候优势更明显。两个图都能说明，在三个数据库中，IEH都比KD树性能好。
+表\ref{tb5}展示了KLSH，KLSH$_{IEH}$和KD树的索引占用内存大小。说明与KD树相比，IEH占用更小空间。考虑到内存使用和速度，KLSH$_{IEH}$在大型ANN检索问题中，比KD树的实现库（FLANN）表现更佳。
+\subsection{时间复杂度}
+\par 正如我们在章节3.2中提到的，我们提出的IEH方法与原始哈希方法的主要不同在于展开阶段。表\ref{tb6}展示了IEH在GIST-1M数据库上的所有运行时间（1000个query）。显然，展开阶段并不好是，尤其是对于较大的汉明半径。
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig5.png}
+\caption{KLSH和KLSH$_{IEH}$在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig5}
+\end{figure}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig6.png}
+\caption{SH和SH$_{IEH}$在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig6}
+\end{figure}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig7.png}
+\caption{AGH和AGH$_{IEH}$在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig7}
+\end{figure}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig8.png}
+\caption{SPH和SPH$_{IEH}$在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig8}
+\end{figure}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig9.png}
+\caption{50-NN LSH$_{MT}$和LSH$_{IEH}$在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig9}
+\end{figure}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig10.png}
+\caption{1NN KLSH, KLSH$_{IEH}$, KD-TREE, 在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig10}
+\end{figure}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig11.png}
+\caption{50-NN KLSH, KLSH$_{IEH}$, KD-TREE在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig11}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig12.png}
+\caption{50-NN KLSH$_{IEH}$相对于汉明半径2，相应参数p的取值在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig12}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{fig13.png}
+\caption{50-NN KLSH$_{IEH}$相对于汉明半径2，相应参数k的取值在CIFAR10(a), GIST-1M(b), SIFT-1M(c)上的召回曲线}
+\label{fig13}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table2.png}
+\label{tb2}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table3.png}
+\label{tb3}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table4.png}
+\label{tb4}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table5.png}
+\label{tb5}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table6.png}
+\label{tb6}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table7.png}
+\label{tb7}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table8.png}
+\label{tb8}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=3.5in]{table9.png}
+\label{tb9}
+\end{figure}
+
+\subsection{参数选择}
+\par 正如之前讨论的，IEH有三个至关重要的参数：p，k和s。在之前的实验中，我们统一设置p=10,k=50,s=3。在这部分实验中，我们试着检查IEH的性能如何受参数影响。
+图\ref{fig12}, \ref{fig13}, \ref{fig14} 展示了50NN、汉明半径为2的时候，KLSH$_{IEH}$的召回率随p、k、s变化的曲线。这些图中同时展示了50NN、汉明半径为4的时候的召回率。他们与KLSH的检索时间相同。表\ref{tb7}, \ref{tb8}, \ref{tb9} 展示了KLSH$_{IEH}$在50NN、汉明半径为2的时候，检索时间随着p、k、s变化的曲线。可以预料，随着p、k、s的增加，召回率有所上升。当p、k、s较大时，KLSH$_{IEH}$小行更多的时间检索NN。这个特点给用户根据不同应用环境，平衡速度和准确率的方法。我们可以清楚地看出p=10,k=50,s=3是比较合理的参数，同时考虑到高的召回率以及低的检索时间。
+
+\clearpage
+
+
+\section{小结与讨论}
+\par 本文中，我们提出了一个新颖的算法IEH，不用很大的汉明半径获得了较高的召回率。IEH利用非常小的汉明半径，迭代利用少量最近候选点的展开扩展成kNN。用这个方法，我们同时获得了较高的召回率和较低的检索时间。理论分析和试验结果均表明，该方法能极大地提高传统哈希算法的检索结果。更重要的是，KD树是基于真实数据最近邻检索问题的最先进的解决方法，实验结果也表明我们的方法相比KD树获得了更高的性能。在未来的工作中，我们会用FLANN加速离线预处理过程，建立多表以更好地改进线上阶段的性能。除此之外，我们将考虑设计一个自动调整参数（如p、k、s）的机制。
+
+
+\begin{thebibliography}{MM}
+\addtolength{\itemsep}{-0.5em}
+\begin{small}
+\bibitem{1}  A. Andoni and P. Indyk, “Near-optimal hashing algorithms for approx- imate nearest neighbor in high dimensions,” Commun. ACM, vol. 51, no. 1, pp. 117–122, 2008.\bibitem{2} L. Arge, M. Berg, H. Haverkort, and K. Yi, “The priority R-tree: A practically efficient and worst-case optimal R-tree,” in Proc. ACM SIGMOD Int. Conf. Manag. Data, Jun. 2004, pp. 347–358.\bibitem{3} S. Arya, D. Mount, N. Netanyahu, R. Silverman, and A. Wu, “An optimal algorithm for approximate nearest neighbor searching in fixed dimensions,” J. ACM, vol. 45, no. 6, pp. 891–923, 1998.\bibitem{4} K. Beyer, J. Goldstein, R. Ramakrishnan, and U. Shaft, “When is ‘near- est neighbor’ meaningful?” in Proc. 7th Int. Conf. Database Theory, Jan. 1999, pp. 217–235.\bibitem{5} P. Ciaccia, M. Patella, and P. Zezula, “M-tree: An efficient access method for similarity search in metric spaces,” in Proc. 23rd Int. Conf. Very Large Data Bases, Aug. 1997, pp. 426–435.\bibitem{6} S. Dasgupta and Y. Freund, “Random projection trees and low dimen- sional manifolds,” in Proc. 40th Annu. ACM Symp. Theory Comput., May 2008, pp. 537–546.\bibitem{7} J. Freidman, J. Bentley, and R. Finkel, “An algorithm for finding best matches in logarithmic expected time,” ACM Trans. Math. Softw., vol. 3, no. 3, pp. 209–226, 1997.\bibitem{8} Y. Gao, B. Zheng, G. Chen, Q. Li, and X. Guo, “Continuous visible nearest neighbor query processing in spatial databases,” Very Large Databases J., vol. 20, no. 3, pp. 371–396, 2011.\bibitem{9} D. G. Lowe, “Distinctive image features from scale invariant keypoints,” Int. J. Comput. Vision, vol. 60, no. 2, pp. 91–110, 2004.\bibitem{10} Y. Gong and S. Lazebnik, “Iterative quantization: A procrustean ap- proach to learning binary codes,” in Proc. IEEE Conf. Comput. Vision Pattern Recogn., Jun. 2011, pp. 817–824.\bibitem{11} K. Hajebi, Y. Abbasi-Yadkori, H. Shahbazi, and H. Zhang, “Fast approximate nearest-neighbor search with k-nearest neighbor graph,” in Proc. 22nd Int. Joint Conf. Artif. Intell., Jul. 2011, pp. 1312–1317.\bibitem{12} J. He, R. Radhakrishnan, S. F. Chang, and C. Bauer, “Compact hashing with joint optimization of search accuracy and time,” in Proc. IEEE Conf. Comput. Vision Pattern Recognit., Jun. 2011, pp. 753–760.\bibitem{13} P. Jain, B. Kulis, and K. Grauman, “Fast similarity search for learned metrics,” IEEE Trans. Pattern Anal. Machine Intell., vol. 31, no. 12, pp. 2143–2157, Dec. 2009.\bibitem{14} Z. Jin, Y. Hu, Y. Lin, D. Zhang, S. Lin, D. Cai, et al., “Complmentary projection hashing,” in Proc. IEEE Int. Conf. Comput. Vision, Dec. 2013, pp. 257–264.\bibitem{15} Z. Jin, C. Li, Y. Lin, and D. Cai, “Density sensitive hashing,” IEEE Trans. Cybern., vol. PP, no. 99, Oct. 2013.\bibitem{16} W. Johnson and J. Lindenstrauss, “Extensions of Lipschitz mappings into a hilbert space,” Contemporary Math., vol. 26, pp. 189–206, Jan. 1984.\bibitem{17} A. Joly and O. Buisson, “A posteriori multi-probe locality sen- sitive hashing,” in Proc. 16th Int. Conf. Multimedia, Oct. 2008, pp. 209–218.\bibitem{18} A. Joly and O. Buisson, “Random maximum margin hashing,” in Proc. IEEE Conf. Comput. Vision Pattern Recognit., Jun. 2011, pp. 873–880.
+\bibitem{19} B. Kulis and T. Darrell, “Learning to hash with binary reconstructive embeddings,” in Proc. Adv. Neural Inf. Process. Syst., Dec. 2008,pp. 1042–1050.\bibitem{20} B. Kulis and K. Grauman, “Kernelized locality-sensitive hashing,” IEEETrans. Pattern Anal. Mach. Intell., vol. 34, no. 6, pp. 2130–2137,Jun. 2012.\bibitem{21} Y. Lifshits and S. Zhang, “Combinatorial algorithms for nearest neigh-bors, near-duplicates and small-world design,” in Proc. ACM-SIAMSymp. Discrete Algorithms, Jan. 2009, pp. 318–326.\bibitem{22} Y. Lin, R. Jin, D. Cai, and X. He, “Random projection with filtering for nearly duplicate search,” in Proc. 26th AAAI Conf. Artif. Intell.,Jul. 2012, pp. 641–647.\bibitem{23} Y. Lin, R. Jin, D. Cai, S. Yan, and X. Li, “Compressed hashing,” in Proc.IEEE Conf. Comput. Vision Pattern Recognit., Jun. 2013, pp. 446–451. 
+\bibitem{24} T. Liu, A. W. Moore, and A. Gray, “New algorithms for efficient high dimensional non-parametric classification,” J. Mach. Learn. Res., vol. 7,pp. 1135–1158, 2006.\bibitem{25} W. Liu, J. Wang, R. Ji, Y. Jiang, and S. F. Chang, “Supervised hashingwith kernels,” in Proc. IEEE Conf. Comput. Vision Pattern Recognit.,Jun. 2012, pp. 2074–2081.\bibitem{26} W. Liu, J. Wang, S. Kumar, and S. F. Chang, “Hashing with graphs,” inProc. 28th Int. Conf. Mach. Learn., Jun./Jul. 2011, pp. 1–8.\bibitem{27} Q. Lv, W. Josephson, Z. Wang, M. Charikar, and K. Li, “Multi-probe LSH: Efficient indexing for high-dimensional similarity search,” in Proc.33rd Int. Conf. Very Large Data Bases, Sep. 2007, pp. 950–961.\bibitem{28} Y. Mu, J. Shen, and S. Yan, “Weakly-supervised hashing in kernel space,” in Proc. IEEE Conf. Comput. Vision Pattern Recognit., Jun. 2010,pp. 3344–3351.\bibitem{29} M. Muja and D. G. Lowe, “Fast approxiamte nearest neighbors withautomatic algorithm configuration,” in Proc. Int. Conf. Vision TheoryApplicat., Feb. 2009, pp. 331–340.\bibitem{30} M. Muja and D. Lowe, FLANN: Fast Library for Approximate NearestNeighbors User Manual, [Online]. Available: http://www.cs.ubc.ca/research/flann/uploads/FLANN/flann   manual-1.8.4.pdf, 2009.\bibitem{31} M. Norouzi and D. J. Fleet, “Minimal loss hashing for compact binary codes,” in Proc. 28th Int. Conf. Mach. Learn., Jun./Jul. 2011,pp. 353–360.\bibitem{32} A. Oliva and A. Torralba, “Modeling the shape of the scene: A holisticrepresentation of the spatial envelope,” Int. J. Comput. Vision, vol. 42,no. 3, pp. 145–175, 2001.\bibitem{33} R. Panigrahy, “Entropy based nearest neighbor search in high dimen-sions,” in Proc. 17th Annu. ACM-SIAM Symp. Discrete Algorithms,Jan. 2006, pp. 1186–1195.\bibitem{34} R. Paredes and E. Chvez, “Using the k-nearest neighbor graph forproximity searching in metric spaces,” in Proc. 12th Int. Conf. StringProcess. Inform. Retrieval, , Nov. 2005, pp. 127–138.\bibitem{35} J. P. Heo, Y. Lee, J. He, S. F. Chang, and S. E. Yoon, “Spherical hashing,” in Proc. IEEE Conf. Comput. Vision Pattern Recogn., Jun. 2012,pp. 2957–2964.\bibitem{36} M. Raginsky and S. Lazebnik, “Locality sensitive binary codes fromshift-invariant kernels,” in Proc. Adv. Neural Inform. Process. Syst., Dec. 2009, pp. 1509–1517.\bibitem{37} S. Ray, S. Bandyopadhyay, and S. Pal, “Dynamic range-based distance measure for microarray expressions and a fast gene-ordering algorithm,” IEEE Trans. Syst., Man, Cybern. B, Cybern., vol. 37, no. 3, pp. 742–749, Jun. 2007.\bibitem{38} J. S. Beis and D. G. Lowe, “Shape indexing using approximate nearest- neighbour search in high-dimensional spaces,” in Proc. IEEE Conf. Comput. Vision Pattern Recognit., Jun. 1997, pp. 1000–1006.\bibitem{39} C. Silpa-Anan and R. Hartley, “Optimised KD-trees for fast image descriptor matching,” in Proc. IEEE Conf. Comput. Vision Pattern Recognit., Jun. 2008, pp. 1–8.\bibitem{40} T. Trzcinski, V. Lepetit, and P. Fua, “Thick boundaries in binary space and their influence on nearest-neighbor search,” Pattern Recognit. Lett., vol. 33, no. 16, pp. 2173–2180, 2012.\bibitem{41} J. Wang, S. Kumar, and S.-F. Chang, “Sequential projection learning for hashing with compact codes,” in Proc. 27th Int. Conf. Mach. Learn., Jun. 2010, pp. 1127–1134.\bibitem{42} J. Wang, S. Kumar, and S. F. Chang, “Semi-supervised hashing for large scale search,” IEEE Trans. Pattern Anal. Mach. Intell., vol. 34, no. 12, pp. 2074–2081, Dec. 2012.\bibitem{43} J.-L. Wang and C.-Y. Chang, “Fast retrieval of electronic messages that contain mistyped words or spelling errors,” IEEE Trans. Syst., Man, Cybern. B, Cybern., vol. 27, no. 3, pp. 441–451, Jun. 1997.\bibitem{44} X. Wang, D. Shasha, and K. Zhang, “Metricmap: An embedding technique for processing distance-based queries in metric spaces,” IEEE Trans. Systems, Man, Cybern. B, Cybern., vol. 35, no. 5, pp. 973–987, Oct. 2005.\bibitem{45} Y. Weiss, A. Torralba, and R. Fergus, “Spectral hashing,” in Proc. Adv. Neural Inform. Process. Syst., Dec. 2008, pp. 1753–1760.\bibitem{46} C. Wu, J. Zhu, D. Cai, C. Chen, and J. Bu, “Semi-supervised nonlinear hashing using bootstrap sequential projection learning,” IEEE Trans. Knowl. Data Eng., vol. 25, no. 6, pp. 1380–1393, Jun. 2013.\bibitem{47} B. Xu, J. Bu, Y. Lin, C. Chen, X. He, and D. Cai, “Harmonious hashing,” in Proc. 23rd Int. Joint Conf. Artif. Intell., Aug. 2013, pp. 1820–1826.\bibitem{48} H. Xu, J. Wang, Z. Li, G. Zeng, S. Li, and N. Yu, “Complementaryhashing for approximate nearest neighbor search,” in Proc. IEEE Int.Conf. Comput. Vision, Nov. 2011, pp. 1631–1638.\bibitem{49} P. Xu, C.-H. Chang, and A. Paplinski, “Self-organizing topological treefor online vector quantization and data clustering,” IEEE Trans. Syst.,Man, Cybern. B, Cybern., vol. 35, no. 3, pp. 515–526, Jun. 2005.\bibitem{50} M.-S. Yang and C.-H. Chen, “On the edited fuzzy k-nearest neighbor rule,” IEEE Trans. Syst., Man, Cybern. B, Cybern., vol. 28, no. 3,pp. 461–466, Jun. 1998.\bibitem{51} Z. Yu, D. Cai, and X. He, “Error-correcting output hashing in fastsimilarity search,” in Proc. 2nd Int. Conf. Internet Multimedia Comput.Service, Dec. 2010, pp. 7–10.\bibitem{52} D. Zhang, G. Yang, Y. Hu, Z. Jin, D. Cai, and X. He, “A unified ap-proximate nearest neighbor search scheme by combining data structure and hashing,” in Proc. 23rd Int. Joint Conf. Artif. Intell., Aug. 2013, pp. 681–687.\bibitem{53} S. Zhang, H.-S. Wong, Z. Yu, and H. Ip, “Hybrid associative retrieval of three-dimensional models,” IEEE Trans. Syst., Man, Cybern. B, Cybern., vol. 40, no. 6, pp. 1582–1595, Dec. 2010.
+\end{small}
+\end{thebibliography}
+\newpage
+\end{CJK*}
+\end{document}
+
